@@ -1,0 +1,147 @@
+//MOTORES y COMANDOS RF PARA EL RECEPTOR
+
+#include "SPI.h" 
+#include "RF24.h"
+#include "nRF24L01.h"
+
+//variable para guardar el comando entrante
+char a;
+
+//pines CE y el CSN conectados a arduino (comunicación SPI)
+RF24 radio(9,10);
+
+//led indicativo al recibir un comando
+int led=2;
+
+// Conexiones del Motor A
+int enA = 3;
+int in1 = 4;
+int in2 = 8;
+
+// Conexiones del Motor B
+int enB = 5;
+int in3 = 7;
+int in4 = 6;
+
+//dirección del igualada al del emisor para establecer un canal de comunicación
+const byte direccion[5] = "00001";
+
+void setup()
+{
+  //declaramos el led como salida
+  pinMode(led,OUTPUT);
+
+  //inicializamos modulo RF24
+  radio.begin();
+ 
+  //inicializamos el puerto serie
+  Serial.begin(9600); 
+  
+  //inicializamos el NRF24L01 
+  radio.begin();
+  
+  //Abrimos el canal de Lectura (numero del canal,dirección) Canal 0 para escritura esto para el modulo esclavo
+  radio.openReadingPipe(0, direccion);
+
+  //Nivel de portencia, minimo para la eficiencia de energia y reducir la inerferencia electromagnética
+  radio.setPALevel(RF24_PA_MIN);
+  
+  //empezamos a escuchar por el canal
+  radio.startListening();
+
+  // Terminales de salida en Arduino para el puente H
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+}
+
+//FUNCIONES
+void adelante()
+{
+  
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  analogWrite(enA, 250);
+  analogWrite(enB, 250);
+
+}
+
+void atras()
+{
+  
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  analogWrite(enA, 250);
+  analogWrite(enB, 250);
+
+}
+
+void derecha()
+{
+  
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  analogWrite(enA, 250);
+  analogWrite(enB, 250);
+
+}
+
+void izquierda()
+{
+  
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  analogWrite(enA, 250);
+  analogWrite(enB, 250);
+
+}
+
+void alto()
+{
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);  
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW); 
+}
+
+
+void loop()
+{
+  if (radio.available() > 0)//Si hay datos disponibles mayores a 0 
+   {
+     digitalWrite(led,HIGH);
+     delay(50);
+     radio.read(&a, sizeof(a));//leemos el dato obteniendolo de la memoria y el tamaño que tiene para garantizar la cantidad correcta de bytes en este caso char=1 byte
+     
+//selección de funcion segun el comando
+     switch (a) {
+      case 'A':
+        adelante();
+        break;
+      case 'B':
+        atras();
+        break;
+      case 'C':
+        derecha();
+        break;
+      case 'D':
+        izquierda();
+        break;
+      case 'X':
+        alto();
+        break;
+    }
+    digitalWrite(led, LOW);
+  }
+}
