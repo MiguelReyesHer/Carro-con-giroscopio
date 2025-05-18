@@ -1,0 +1,116 @@
+//Desde el seervidor podremos observar las imagenes de la camara, la opcion de activar o desactivar el flash
+
+//nombre y contraseña wifi
+const char* ssid = " ";
+const char* password = " ";
+
+#include "esp_wifi.h"
+#include "esp_camera.h"
+#include <WiFi.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+
+//definimos el modelo de la tarjeta y sus pines
+#define CAMERA_MODEL_AI_THINKER
+
+#define PWDN_GPIO_NUM     32
+#define RESET_GPIO_NUM    -1
+#define XCLK_GPIO_NUM      0
+#define SIOD_GPIO_NUM     26
+#define SIOC_GPIO_NUM     27
+#define Y9_GPIO_NUM       35
+#define Y8_GPIO_NUM       34
+#define Y7_GPIO_NUM       39
+#define Y6_GPIO_NUM       36
+#define Y5_GPIO_NUM       21
+#define Y4_GPIO_NUM       19
+#define Y3_GPIO_NUM       18
+#define Y2_GPIO_NUM        5
+#define VSYNC_GPIO_NUM    25
+#define HREF_GPIO_NUM     23
+#define PCLK_GPIO_NUM     22
+
+//iniciamos el servidor de la camara
+void startCameraServer();
+
+void setup(){
+  //desactivamos la proteccion contra bajos voltajes para evitar reinicios
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
+
+  //inciamos la comunicacion serial
+  Serial.begin(115200);
+
+  //configuramos el modelo de la camara 40-v3
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sscb_sda = SIOD_GPIO_NUM;
+  config.pin_sscb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG;
+
+  //parametros de la camara, calidad, fotogramas
+  if (psramFound()){
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
+  } else {
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+  }
+
+  //inicializamos la camara y en caso de no lograrlo recibimos un error
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Fallo la inicializacion de la camara", err);
+    return;
+  }
+
+  //tamaño de fotogramas y volteamos la camara 180 grados
+  sensor_t * s = esp_camera_sensor_get();
+  s->set_framesize(s, FRAMESIZE_QVGA);
+  s->set_vflip(s, 1);
+  s->set_hmirror(s, 1);
+
+  //configuracion de un canal PWM a 5000HZ a una resolucion de 8 bits y la asociamos al flash integrado a la tarjeta para controlar la intenciadad de luz
+  ledcSetup(7, 5000, 8);
+  ledcAttachPin(4, 7);  //pin4 is LED
+
+  //creamos un punto de acceso wifi con las credenciales anteriores y obtenemos la ip para entrar a la pagina web
+  WiFi.softAP(ssid, password);
+  IPAddress miIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(miIP);  //192.168.4.1
+  
+  //iniciamos el servidor de la camara 
+  startCameraServer();
+
+  //parpadeo de 5 veces del led para indicar que todo se ha configurado y esta listo para la transmicion de imagen
+  for (int i = 0; i < 5; i++) {
+    ledcWrite(7, 10);
+    delay(50);
+    ledcWrite(7, 0);
+    delay(50);
+  }
+}
+
+void loop() {
+  //imprimimos a travez del puerto serial la potencia de la señal wifi expresada en decibelios
+  delay(1000);
+  Serial.printf("RSSi: %ld dBm\n", WiFi.RSSI());
+}
