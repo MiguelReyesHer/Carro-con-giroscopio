@@ -1,0 +1,107 @@
+//EMISOR - Giroscopio, Arduino nano y el Modulo RF
+
+#include <SPI.h>  
+#include <RF24.h>
+#include "I2Cdev.h"
+#include "MPU6050.h"
+#include "Wire.h"
+
+//variable para almacenar el comando a enviar
+char comando;
+
+//declaramos el giroscopio
+MPU6050 sensor;
+
+//variables para el eje x y el eje y
+int ejex;
+int ejey;
+
+// Valores giroscopio en los ejes x,y,z
+int ax, ay, az;
+
+//pines CE y el CSN conectados a arduino (comunicación SPI)
+RF24 radio(9, 10);
+
+//dirección del igualada al del receptor para establecer un canal de comunicación
+const byte direccion[5] = "00001";
+ 
+void setup() {
+  //inicializamos el NRF24L01 
+  radio.begin();
+
+  //inicializamos el puerto serie
+  Serial.begin(9600);
+
+  //inicializamos la comunicacion I2C
+  Wire.begin();    
+
+  //Iniciando el sensor
+  sensor.initialize();
+ 
+  //Abrimos el canal de Lectura (numero del canal) para el modulo maestro
+   radio.openWritingPipe(direccion);
+
+  //Nivel de portencia, minimo para la eficiencia de energia y reducir la inerferencia electromagnética
+   radio.setPALevel(RF24_PA_MIN);
+
+   //Dejamos de escuchar por el canal para entrar en modo escritura
+   radio.stopListening();
+}
+
+//Funcion para procesar el dato leido de la rotacion del eje y asociarla a un comando
+char inclinacion() {
+  if (ejex <= -9000 && ejex >= -18000) {
+    return 'C';
+  }
+  if (ejex >= 9000 && ejex < 18000) {
+    return 'D';
+  }
+  if (ejey <= -8000 && ejey >= -18000) {
+    return 'A';
+  }
+  if (ejey >= 8000 && ejey <= 18000) {
+    return 'B';
+  }
+  if (ejey > -8000 && ejey < 7000 && ejex > -9000 && ejex < 9000) {
+    return 'X';
+  }
+
+  // Valor predeterminado si no se cumple ninguna condición
+  return 'N';
+}
+ 
+void loop() {
+  //obtenemos los datos del giroscopio
+  sensor.getAcceleration(&ax, &ay, &az);
+  ejex=ax;
+  ejey=ay;
+  delay(250);
+
+ //llamamos la funcion inclinacion para que nos devuelva el comando segun el lado de la inclinación y en el siguiente switch asignamos la variable comando según la letra obtenida 
+switch (inclinacion()) {
+    case 'C':
+      comando = 'C';
+      Serial.println("derecha");
+      break;
+    case 'D':
+      comando = 'D';
+      Serial.println("izquierda");
+      break;
+    case 'A':
+      comando = 'A';
+      Serial.println("adelante");
+      break;
+    case 'B':
+      comando = 'B';
+      Serial.println("atras");
+      break;
+    case 'X':
+      comando = 'X';
+      Serial.println("alto");
+      break;
+  }
+
+  //emitimos la señal a travez del modulo de radio con la variable comando
+  radio.write(&comando, sizeof(comando));
+  delay(100);
+}
